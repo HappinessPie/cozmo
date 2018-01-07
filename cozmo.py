@@ -1,13 +1,15 @@
 import mod_utils
 import time
 import _thread as thread
-import asyncio
 import cozmo
 from cozmo.util import degrees, distance_mm, speed_mmps
 from cozmo.objects import LightCube1Id, LightCube2Id, LightCube3Id
 import tts.tts as tts
 import extended_command
 import networking
+#HP ADDED CHARGING
+import return_to_charger as autodocking
+
 
 coz = None
 is_headlight_on = False
@@ -31,6 +33,10 @@ default_anims_for_keys = ["anim_bored_01",  # 0 drat
                           "anim_upgrade_reaction_lift_01",  # 8 excited
                           "anim_speedtap_wingame_intensity02_02"  # 9 back up quick
                          ]
+#HP ADDED CHARGING
+def gohome(command, args):
+    if extended_command.is_authed(args['name']) == 2:
+        autodocking.return_to_charger(coz)
 
 def play_anim(command, args):
     if len(command) > 1:
@@ -134,7 +140,6 @@ def setup(robot_config):
         extended_command.add_command('.vol', set_volume)
         extended_command.add_command('.charge', set_charging)
         extended_command.add_command('.stay', set_stay_on_dock)
-        extended_command.add_command('.drive_to_charger', drive_to_charger)
 
     coz.set_robot_volume(volume/100) # set volume
 
@@ -218,67 +223,6 @@ def check_battery( robot: cozmo.robot.Robot ):
             charging = 0
             robot.say_text("finished charging")
     networking.sendChargeState(charging)
-
-def drive_to_charger(robot):
-    '''The core of the drive_to_charger program'''
-
-    # If the robot was on the charger, drive them forward and clear of the charger
-    if robot.is_on_charger:
-        # drive off the charger
-        robot.drive_off_charger_contacts().wait_for_completed()
-        robot.drive_straight(distance_mm(100), speed_mmps(50)).wait_for_completed()
-        # Start moving the lift down
-        robot.move_lift(-3)
-        # turn around to look at the charger
-        robot.turn_in_place(degrees(180)).wait_for_completed()
-        # Tilt the head to be level
-        robot.set_head_angle(degrees(0)).wait_for_completed()
-        # wait half a second to ensure Cozmo has seen the charger
-        time.sleep(0.5)
-        # drive backwards away from the charger
-        robot.drive_straight(distance_mm(-60), speed_mmps(50)).wait_for_completed()
-
-    # try to find the charger
-    charger = None
-
-    # see if Cozmo already knows where the charger is
-    if robot.world.charger:
-        if robot.world.charger.pose.is_comparable(robot.pose):
-            print("Cozmo already knows where the charger is!")
-            charger = robot.world.charger
-        else:
-            # Cozmo knows about the charger, but the pose is not based on the
-            # same origin as the robot (e.g. the robot was moved since seeing
-            # the charger) so try to look for the charger first
-            pass
-
-    if not charger:
-        # Tell Cozmo to look around for the charger
-        look_around = robot.start_behavior(cozmo.behavior.BehaviorTypes.LookAroundInPlace)
-        try:
-            charger = robot.world.wait_for_observed_charger(timeout=30)
-            print("Found charger: %s" % charger)
-        except asyncio.TimeoutError:
-            print("Didn't see the charger")
-        finally:
-            # whether we find it or not, we want to stop the behavior
-            look_around.stop()
-
-    if charger:
-        # Attempt to drive near to the charger, and then stop.
-        # Changed to include docking maneuver attempt
-        robot.say_text("There you are.").wait_for_completed()
-        action = robot.go_to_object(charger, distance_mm(40.0)) # Distance changed, ALIGNMENT NEEDS WORK!
-        action.wait_for_completed()
-        # Following lines added to turn around and dock with charger
-        robot.turn_in_place(degrees(180)).wait_for_completed()
-        robot.drive_straight(distance_mm(-150), speed_mmps(50)).wait_for_completed()
-        if robot.is_on_charger:
-            robot.say_text("Home sweet home.").wait_for_completed()
-        else:
-            robot.drive_straight(distance_mm(-50), speed_mmps(50)).wait_for_completed()
-            if robot.is_on_charger:
-                robot.say_text("Home sweet home.").wait_for_completed()
 
 def move(args):
     global charging

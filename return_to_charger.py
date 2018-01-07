@@ -87,7 +87,3 @@ def drive_to_charger(robot):
             robot.drive_straight(distance_mm(-50), speed_mmps(50)).wait_for_completed()
             if robot.is_on_charger:
                 robot.say_text("Home sweet home.").wait_for_completed()
-
-
-cozmo.robot.Robot.drive_off_charger_on_connect = False  # Cozmo can stay on charger for now
-cozmo.run_program(drive_to_charger, use_viewer=True, force_viewer_on_top=True)
